@@ -5,7 +5,7 @@ import sqlite3
 from tqdm.auto import tqdm
 
 import funcx
-from coffea.processor.funcx.detail import FuncXFuture
+from coffea.processor.funcx.detail import MappedFuncXFuture
 funcx.set_file_logger('funcx.log')
 
 client = funcx.sdk.client.FuncXClient(funcx_service_address='https://dev.funcx.org/api/v1')
@@ -14,8 +14,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--tasks_per_core", default=10, help="number of cores per task")
 parser.add_argument("--sleep", default=60, help="number of cores per task")
 parser.add_argument("--tag", default='after yadu updates', help="any extra info to save to DB")
-parser.add_argument("--cores_per_manager", default=16)
-parser.add_argument("--endpoint", default='fccc596c-762b-4a00-a642-ecafda1b982f')
+parser.add_argument("--cores_per_manager", default=28)
+parser.add_argument("--endpoint", default='07ad6996-3505-4b86-b95a-aa33acf842d8')
+parser.add_argument("--batch_size", default=5000)
+
 args = parser.parse_args()
 
 db = sqlite3.connect('data.db')
@@ -32,12 +34,12 @@ db.execute("""create table if not exists analyses(
 db.commit()
 db.close()
 
-def sleep(seconds, fake_args):
+def sleep(fake_args):
     import time
     import random
     import string
 
-    time.sleep(seconds)
+    time.sleep(60)
 
     return ''.join(random.choice(string.ascii_lowercase) for i in range(10))
 
@@ -63,32 +65,18 @@ with open(os.path.expanduser('~/connected_managers'), 'r') as f:
 
 cores = connected_managers * args.cores_per_manager
 tasks = int(args.tasks_per_core * cores)
+task_args = [fake_args for _ in range(tasks)]
+batched_args = [task_args[i:i + args.batch_size] for i in range(0, len(task_args), args.batch_size)]
 
 start_submit = time.time()
-
 futures = []
-for t in tqdm(range(tasks), unit='tasks', total=tasks, desc='submission'):
-    try:
-        futures += [FuncXFuture(client.run(
-                args.sleep,
-                fake_args,
-                endpoint_id=args.endpoint,
-                function_id=sleep_uuid
-                )
-            )
-        ]
-    except Exception as e:
-        time.sleep(1)
-        print(e)
-
+for batch in batched_args:
+    futures += [MappedFuncXFuture(client.map_run(batch, endpoint_id=args.endpoint, function_id=sleep_uuid))]
+    print('submitted batch of {} tasks'.format(len(batch)))
 
 end_submit = time.time()
 
-while len(futures) > 0:
-    for index, f in enumerate(futures):
-        if f.done():
-            f.result()
-            futures.pop(index)
+print([f.result() for f in futures])
 
 returned = time.time()
 print('finished in {:.0f}s'.format(returned - start_submit))
