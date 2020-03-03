@@ -13,9 +13,10 @@ client = funcx.sdk.client.FuncXClient(funcx_service_address='https://dev.funcx.o
 parser = argparse.ArgumentParser()
 parser.add_argument("--tasks_per_core", default=10, help="number of cores per task")
 parser.add_argument("--sleep", default=60, help="number of cores per task")
-parser.add_argument("--tag", default='after yadu updates', help="any extra info to save to DB")
-parser.add_argument("--cores_per_manager", default=28)
-parser.add_argument("--endpoint", default='07ad6996-3505-4b86-b95a-aa33acf842d8')
+parser.add_argument("--tag", default='after yadu updates (ndcrc)', help="any extra info to save to DB")
+parser.add_argument("--cores_per_manager", default=16)
+# parser.add_argument("--endpoint", default='07ad6996-3505-4b86-b95a-aa33acf842d8')
+parser.add_argument("--endpoint", default='8bd5cb36-1eec-4769-b001-6b34fa8f9dc7') # ndcrc
 parser.add_argument("--batch_size", default=5000)
 
 args = parser.parse_args()
@@ -71,7 +72,12 @@ batched_args = [task_args[i:i + args.batch_size] for i in range(0, len(task_args
 start_submit = time.time()
 futures = []
 for batch in batched_args:
-    futures += [MappedFuncXFuture(client.map_run(batch, endpoint_id=args.endpoint, function_id=sleep_uuid))]
+    futures += [MappedFuncXFuture(
+        batch,
+        args.endpoint,
+        sleep_uuid
+        )
+    ]
     print('submitted batch of {} tasks'.format(len(batch)))
 
 end_submit = time.time()
