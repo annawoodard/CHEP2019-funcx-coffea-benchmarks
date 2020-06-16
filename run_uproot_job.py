@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 import json
 import time
 import sqlite3
@@ -29,16 +30,16 @@ parser.add_argument("connected_managers", help="number of connected managers")
 parser.add_argument("--analyses", default=1, help="number of concurrent analyses")
 # parser.add_argument("--tag", default='xrootd_stageout', help="any extra info to save to DB")
 parser.add_argument("--tag", default='file_stageout', help="any extra info to save to DB")
-parser.add_argument("--cores_per_manager", default=16)
+parser.add_argument("--cores_per_manager", default=28)
 parser.add_argument("--chunksize", default=200000)
 # parser.add_argument("--chunksize", default=75000)
 parser.add_argument("--test", default=False, action="store_true", help='only dispatch a small test')
 args = parser.parse_args()
 
-ndt3_uuid = '1c0434db-1e2d-43c1-86ae-e2c80b6d25ae'
+ndt3_cuid = '1c0434db-1e2d-43c1-86ae-e2c80b6d25ae'
 ndcrc_uuid = '8bd5cb36-1eec-4769-b001-6b34fa8f9dc7'
 wisconsin_uuid = 'af21d0db-27f2-4906-beba-6baffac18393'
-midway_uuid = '07ad6996-3505-4b86-b95a-aa33acf842d8'
+midway_uuid = 'aebefb11-9a24-4912-96ff-d03c4f551802'
 
 db = sqlite3.connect('coffea.db')
 db.execute("""create table if not exists analyses(
@@ -67,7 +68,7 @@ if args.test:
 
 submitted = time.time()
 
-print('submitting job at {:.1f}'.format(submitted))
+print('[{}] starting submission'.format(datetime.now().strftime("%H:%M:%S")))
 final_accumulator, metrics = run_uproot_job(
     dataset,
     'otree',
@@ -76,17 +77,21 @@ final_accumulator, metrics = run_uproot_job(
     executor_args={
         # 'local_path': '/hadoop/store/user/awoodard/data',
         # 'stageout_url': 'root://deepthought.crc.nd.edu://store/user/awoodard/data',
-        'local_path': '/scratch365/awoodard/funcx',
-        'stageout_url': 'file:///scratch365/awoodard/funcx',
-        'endpoints': [ndcrc_uuid],
+        # 'local_path': '/scratch365/awoodard/funcx',
+        # 'stageout_url': 'file:///scratch365/awoodard/funcx',
+        'local_path': '/scratch/midway2/annawoodard/funcx/results',
+        'stageout_url': 'file:///scratch/midway2/annawoodard/funcx/results',
+        'endpoints': [midway_uuid],
         'skipbadfiles': True,
         'savemetrics': True,
         'xrootdtimeout': 20,
         # 'poll_period': 5,
         'poll_period': 30,
-        'tailtimeout': 800,
+        # 'tailtimeout': 500,
         # 'tailretry': 90,
+        # 'batch_size': 500,
         'funcx_service_address': 'https://dev.funcx.org/api/v1'
+        # 'funcx_service_address': 'https://funcx.org/api/v1'
     },
     pre_executor=futures_executor,
     chunksize=args.chunksize,
@@ -94,6 +99,7 @@ final_accumulator, metrics = run_uproot_job(
 )
 returned = time.time()
 print(metrics)
+print(final_accumulator)
 print('job returned in {:.1f}s'.format(returned - submitted))
 
 save(metadata_cache, 'metadata.cache')
